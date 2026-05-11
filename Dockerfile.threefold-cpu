@@ -1,0 +1,81 @@
+# TFGrid flist runtime (CPU-only) — zinit-supervised, nginx on port 80
+FROM ubuntu:22.04
+
+ENV DEBIAN_FRONTEND=noninteractive \
+    TZ=Etc/UTC \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONPATH=/opt/app:/opt/app/src \
+    HF_HOME=/opt/app/.cache/huggingface \
+    MPLCONFIGDIR=/tmp/matplotlib \
+    DATA_DIR=/opt/app/data
+
+# System packages (original + nginx + openssh-server)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.10 \
+    python3-pip \
+    python3.10-venv \
+    python3-dev \
+    git \
+    wget \
+    curl \
+    unzip \
+    ca-certificates \
+    build-essential \
+    libglib2.0-0 \
+    libsm6 \
+    libxext6 \
+    libxrender1 \
+    libgomp1 \
+    nginx \
+    openssh-server \
+    && rm -rf /var/lib/apt/lists/*
+
+# Make python3 point to python3.10
+RUN ln -sf /usr/bin/python3.10 /usr/bin/python3
+
+# Install zinit
+RUN curl -fsSL https://github.com/threefoldtech/zinit/releases/download/v0.2.14/zinit \
+    -o /sbin/zinit && chmod +x /sbin/zinit
+
+WORKDIR /opt/app
+
+# Copy requirements first for better layer caching
+COPY requirements.txt /opt/app/requirements.txt
+
+# Upgrade pip and install Python dependencies
+RUN python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel && \
+    python3 -m pip install --no-cache-dir -r requirements.txt && \
+    python3 -m pip install --no-cache-dir \
+        torch==2.5.1 \
+        torchvision==0.20.1 \
+        torchaudio==2.5.1 \
+        --index-url https://download.pytorch.org/whl/cpu && \
+    python3 -m pip install --no-cache-dir \
+        pytorch_fid==0.3.0 \
+        accelerate==0.26.1
+
+# Copy service scripts and make executable
+COPY scripts/ /opt/app/scripts/
+RUN chmod +x /opt/app/scripts/*.sh
+
+# Copy zinit service definitions
+COPY zinit/ /etc/zinit/
+
+# Copy nginx config (replace default site)
+COPY nginx/default.conf /etc/nginx/sites-enabled/default
+
+# Copy the full repository
+COPY . /opt/app
+
+# Re-apply execute bit after final COPY (COPY . overwrites the earlier chmod)
+RUN chmod +x /opt/app/scripts/*.sh
+
+# OCI labels
+LABEL org.opencontainers.image.title="LatentDiffusion-2DChestCT-CCIA24-cpu" \
+      org.opencontainers.image.description="TFGrid flist — Characterization of Synthetic Lung Nodules in Conditional Latent Diffusion of Chest CT Scans (CPU-only)" \
+      org.opencontainers.image.source="https://github.com/multimedia-eurecat/LatentDiffusion-2DChestCT-CCIA24"
+
+EXPOSE 80
+
+ENTRYPOINT ["/sbin/zinit", "init"]
