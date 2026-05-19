@@ -54,6 +54,15 @@ RUN python3 -m pip install --no-cache-dir --upgrade pip setuptools wheel && \
 # Copy the full repository
 COPY . /opt/app
 
+# Download checkpoints and training data if they are not already present
+RUN if [ -d /opt/app/data/ckpts ] && [ -d /opt/app/data/train_data ]; then \
+        echo "Data directories already present; skipping Zenodo download."; \
+    else \
+        wget -O /tmp/LatentDiffusion-2DChestCT-CCIA24_data.zip https://zenodo.org/records/19053504/files/LatentDiffusion-2DChestCT-CCIA24_data.zip && \
+        unzip -n /tmp/LatentDiffusion-2DChestCT-CCIA24_data.zip -d /opt/app && \
+        rm -r /tmp/LatentDiffusion-2DChestCT-CCIA24_data.zip; \
+    fi
+
 # Optional OCI labels
 LABEL org.opencontainers.image.title="LatentDiffusion-2DChestCT-CCIA24" \
       org.opencontainers.image.description="Docker image for Characterization of Synthetic Lung Nodules in Conditional Latent Diffusion of Chest CT Scans" \

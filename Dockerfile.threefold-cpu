@@ -68,6 +68,15 @@ COPY nginx/default.conf /etc/nginx/sites-enabled/default
 # Copy the full repository
 COPY . /opt/app
 
+# Download checkpoints and training data if they are not already present
+RUN if [ -d /opt/app/data/ckpts ] && [ -d /opt/app/data/train_data ]; then \
+        echo "Data directories already present; skipping Zenodo download."; \
+    else \
+        wget -O /tmp/LatentDiffusion-2DChestCT-CCIA24_data.zip https://zenodo.org/records/19053504/files/LatentDiffusion-2DChestCT-CCIA24_data.zip && \
+        unzip -n /tmp/LatentDiffusion-2DChestCT-CCIA24_data.zip -d /opt/app && \
+        rm -r /tmp/LatentDiffusion-2DChestCT-CCIA24_data.zip; \
+    fi
+
 # Re-apply execute bit after final COPY (COPY . overwrites the earlier chmod)
 RUN chmod +x /opt/app/scripts/*.sh
 
