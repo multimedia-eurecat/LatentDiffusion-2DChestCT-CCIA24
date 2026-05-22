@@ -82,6 +82,14 @@ bash download_data.sh
 
 ---
 
+#### ThreeFold / TFGrid runtime
+
+For deployment-specific docs (ThreeFold Dockerfiles, zinit runtime, environment variables, auth, and troubleshooting), see:
+
+- [`docs/threefold-runtime.md`](docs/threefold-runtime.md)
+
+---
+
 #### Acknowledgements
 
 Training images and nodule masks were derived from the original [LIDC-IDRI](https://www.cancerimagingarchive.net/collection/lidc-idri/) dataset of chest CT scans (133.16GB).
@@ -92,4 +100,3 @@ Training script based on:
 
 UNet implementation based on:
 - InverseSR: 3D Brain MRI Super-Resolution Using a Latent Diffusion Model: [https://github.com/BioMedAI-UCSC/InverseSR](https://github.com/BioMedAI-UCSC/InverseSR)
-

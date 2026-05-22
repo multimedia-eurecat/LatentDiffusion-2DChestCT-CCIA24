@@ -12,7 +12,16 @@ from math import ceil
 
 import torch
 from tqdm import tqdm
-from flask import Flask, request, send_file, url_for, render_template_string, abort
+from flask import (
+    Flask,
+    request,
+    send_file,
+    url_for,
+    render_template_string,
+    abort,
+    session,
+    redirect,
+)
 
 # Reuse the repo's existing utilities.
 sys.path.insert(1, "./src")
@@ -308,8 +317,89 @@ class GeneratorApp:
 generator_app = GeneratorApp()
 app = Flask(__name__)
 
+# Simple password auth for public deployments.
+# If PASSWORD is empty/unset, auth is disabled.
+AUTH_PASSWORD = os.getenv("PASSWORD", "")
+AUTH_ENABLED = bool(AUTH_PASSWORD)
+app.secret_key = os.getenv("FLASK_SECRET_KEY", os.urandom(32))
+
 RUNS = {}
 RUNS_LOCK = Lock()
+
+
+LOGIN_TEMPLATE = """
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Login</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 32px; max-width: 420px; }
+    h1 { margin-bottom: 16px; }
+    .panel { border: 1px solid #ddd; border-radius: 10px; padding: 18px; }
+    label { display: block; margin-top: 8px; font-weight: 600; }
+    input[type=password] { width: 100%; padding: 10px; margin-top: 6px; box-sizing: border-box; }
+    button { margin-top: 14px; padding: 10px 16px; border: 0; border-radius: 8px; background: #0b5fff; color: white; cursor: pointer; }
+    .error { background: #ffe8e8; color: #8a1f1f; border: 1px solid #f1b5b5; padding: 10px; border-radius: 8px; margin-bottom: 12px; }
+    .muted { color: #666; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <h1>Protected UI</h1>
+  <div class="panel">
+    {% if error %}
+      <div class="error">{{ error }}</div>
+    {% endif %}
+    <form method="post">
+      <label for="password">Password</label>
+      <input type="password" id="password" name="password" autofocus required>
+      <button type="submit">Login</button>
+    </form>
+    <div class="muted" style="margin-top:10px;">Access is controlled by env var: PASSWORD</div>
+  </div>
+</body>
+</html>
+"""
+
+
+@app.before_request
+def require_password_auth():
+    if not AUTH_ENABLED:
+        return None
+
+    allowed_paths = {"/login"}
+    if request.path in allowed_paths:
+        return None
+
+    if session.get("authenticated") is True:
+        return None
+
+    return redirect(url_for("login", next=request.path))
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if not AUTH_ENABLED:
+        return redirect(url_for("index"))
+
+    error = None
+    if request.method == "POST":
+        provided = request.form.get("password", "")
+        if provided == AUTH_PASSWORD:
+            session["authenticated"] = True
+            next_path = request.args.get("next") or "/"
+            if not next_path.startswith("/"):
+                next_path = "/"
+            return redirect(next_path)
+        error = "Invalid password"
+
+    return render_template_string(LOGIN_TEMPLATE, error=error)
+
+
+@app.route("/logout", methods=["GET"])
+def logout():
+    session.pop("authenticated", None)
+    return redirect(url_for("login"))
 
 
 class RunLogger:
